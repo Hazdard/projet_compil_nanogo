@@ -1,0 +1,188 @@
+# dune build @all
+# OCAMLPARAM: unset
+# Shared cache: disabled
+# Workspace root: /users/dptinfo/ben-arous/Documents/projet_nanogo/src
+# Auto-detected concurrency: 8
+$ /usr/bin/ocamlc.opt -config > /tmp/dune_c0f43f_output
+# Dune context:
+#  { name = "default"
+#  ; kind = "default"
+#  ; profile = Dev
+#  ; merlin = true
+#  ; for_host = None
+#  ; fdo_target_exe = None
+#  ; build_dir = "default"
+#  ; toplevel_path =
+#      Some External "/users/dptinfo/ben-arous/.opam/default/lib/toplevel"
+#  ; ocaml_bin = External "/usr/bin"
+#  ; ocaml = Ok External "/users/dptinfo/ben-arous/.opam/default/bin/ocaml"
+#  ; ocamlc = External "/usr/bin/ocamlc.opt"
+#  ; ocamlopt = Ok External "/usr/bin/ocamlopt.opt"
+#  ; ocamldep = Ok External "/usr/bin/ocamldep.opt"
+#  ; ocamlmklib = Ok External "/usr/bin/ocamlmklib.opt"
+#  ; env =
+#      map
+#        { "DUNE_OCAML_HARDCODED" :
+#            "/users/dptinfo/ben-arous/.opam/default/lib"
+#        ; "DUNE_OCAML_STDLIB" : "/usr/lib/ocaml"
+#        ; "DUNE_SOURCEROOT" :
+#            "/users/dptinfo/ben-arous/Documents/projet_nanogo/src"
+#        ; "INSIDE_DUNE" :
+#            "/users/dptinfo/ben-arous/Documents/projet_nanogo/src/_build/default"
+#        ; "OCAMLFIND_IGNORE_DUPS_IN" :
+#            "/users/dptinfo/ben-arous/Documents/projet_nanogo/src/_build/install/default/lib"
+#        ; "OCAMLPATH" :
+#            "/users/dptinfo/ben-arous/Documents/projet_nanogo/src/_build/install/default/lib"
+#        ; "OCAMLTOP_INCLUDE_PATH" :
+#            "/users/dptinfo/ben-arous/Documents/projet_nanogo/src/_build/install/default/lib/toplevel"
+#        ; "OCAML_COLOR" : "always"
+#        ; "OPAMCOLOR" : "always"
+#        }
+#  ; findlib_paths = [ External "/users/dptinfo/ben-arous/.opam/default/lib" ]
+#  ; arch_sixtyfour = true
+#  ; natdynlink_supported = true
+#  ; supports_shared_libraries = true
+#  ; ocaml_config =
+#      { version = "4.08.1"
+#      ; standard_library_default = "/usr/lib/ocaml"
+#      ; standard_library = "/usr/lib/ocaml"
+#      ; standard_runtime = "the_standard_runtime_variable_was_deleted"
+#      ; ccomp_type = "cc"
+#      ; c_compiler = "x86_64-linux-gnu-gcc"
+#      ; ocamlc_cflags = [ "-O2"; "-fno-strict-aliasing"; "-fwrapv"; "-fPIC" ]
+#      ; ocamlc_cppflags = [ "-D_FILE_OFFSET_BITS=64"; "-D_REENTRANT" ]
+#      ; ocamlopt_cflags = [ "-O2"; "-fno-strict-aliasing"; "-fwrapv" ]
+#      ; ocamlopt_cppflags = [ "-D_FILE_OFFSET_BITS=64"; "-D_REENTRANT" ]
+#      ; bytecomp_c_compiler =
+#          [ "x86_64-linux-gnu-gcc"
+#          ; "-O2"
+#          ; "-fno-strict-aliasing"
+#          ; "-fwrapv"
+#          ; "-fPIC"
+#          ; "-D_FILE_OFFSET_BITS=64"
+#          ; "-D_REENTRANT"
+#          ]
+#      ; bytecomp_c_libraries = [ "-lm"; "-ldl"; "-lpthread" ]
+#      ; native_c_compiler =
+#          [ "x86_64-linux-gnu-gcc"
+#          ; "-O2"
+#          ; "-fno-strict-aliasing"
+#          ; "-fwrapv"
+#          ; "-D_FILE_OFFSET_BITS=64"
+#          ; "-D_REENTRANT"
+#          ]
+#      ; native_c_libraries = [ "-lm"; "-ldl" ]
+#      ; native_pack_linker = [ "x86_64-linux-gnu-ld"; "-r"; "-o" ]
+#      ; cc_profile = [ "-pg" ]
+#      ; architecture = "amd64"
+#      ; model = "default"
+#      ; int_size = 63
+#      ; word_size = 64
+#      ; system = "linux"
+#      ; asm = [ "x86_64-linux-gnu-as" ]
+#      ; asm_cfi_supported = true
+#      ; with_frame_pointers = false
+#      ; ext_exe = ""
+#      ; ext_obj = ".o"
+#      ; ext_asm = ".s"
+#      ; ext_lib = ".a"
+#      ; ext_dll = ".so"
+#      ; os_type = "Unix"
+#      ; default_executable_name = "a.out"
+#      ; systhread_supported = true
+#      ; host = "x86_64-pc-linux-gnu"
+#      ; target = "x86_64-pc-linux-gnu"
+#      ; profiling = true
+#      ; flambda = false
+#      ; spacetime = false
+#      ; safe_string = false
+#      ; exec_magic_number = "Caml1999X025"
+#      ; cmi_magic_number = "Caml1999I025"
+#      ; cmo_magic_number = "Caml1999O025"
+#      ; cma_magic_number = "Caml1999A025"
+#      ; cmx_magic_number = "Caml1999Y025"
+#      ; cmxa_magic_number = "Caml1999Z025"
+#      ; ast_impl_magic_number = "Caml1999M025"
+#      ; ast_intf_magic_number = "Caml1999N025"
+#      ; cmxs_magic_number = "Caml1999D025"
+#      ; cmt_magic_number = "Caml1999T025"
+#      ; natdynlink_supported = true
+#      ; supports_shared_libraries = true
+#      ; windows_unicode = false
+#      }
+#  }
+$ (cd _build/default && /users/dptinfo/ben-arous/.opam/default/bin/menhir -v parser.mly --base parser --infer-write-query parser__mock.ml.mock)
+$ (cd _build/default && /usr/bin/ocamllex -q -o lexer.ml lexer.mll)
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl main.ml) > _build/default/.main.eobjs/main.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl parser__mock.ml.mock) > _build/default/.main.eobjs/parser__mock.ml.mock.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl compile.ml) > _build/default/.main.eobjs/compile.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl lexer.ml) > _build/default/.main.eobjs/lexer.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl pretty.ml) > _build/default/.main.eobjs/pretty.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl typing.ml) > _build/default/.main.eobjs/typing.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl usage.ml) > _build/default/.main.eobjs/usage.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -intf x86_64.mli) > _build/default/.main.eobjs/x86_64.mli.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -intf ast.mli) > _build/default/.main.eobjs/ast.mli.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -intf tast.mli) > _build/default/.main.eobjs/tast.mli.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl lib.ml) > _build/default/.main.eobjs/lib.ml.d
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/ast.cmi -c -intf ast.mli)
+$ (cd _build/.sandbox/52173cbfad68a5d94e5c72e29496721a/default && /usr/bin/ocamlc.opt -g -I .main.eobjs/byte -short-paths -i -impl parser__mock.ml.mock) > _build/.sandbox/52173cbfad68a5d94e5c72e29496721a/default/parser__mock.mli.inferred
+$ (cd _build/default && /users/dptinfo/ben-arous/.opam/default/bin/menhir -v parser.mly --base parser --infer-read-reply parser__mock.mli.inferred)
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -intf parser.mli) > _build/default/.main.eobjs/parser.mli.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl x86_64.ml) > _build/default/.main.eobjs/x86_64.ml.d
+$ (cd _build/default && /usr/bin/ocamldep.opt -modules -impl parser.ml) > _build/default/.main.eobjs/parser.ml.d
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/parser.cmi -c -intf parser.mli)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/tast.cmi -c -intf tast.mli)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/x86_64.cmi -c -intf x86_64.mli)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/lib.cmo -c -impl lib.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/lexer.cmo -c -impl lexer.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/usage.cmo -c -impl usage.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/pretty.cmo -c -impl pretty.ml)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/lib.cmx -c -impl lib.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/typing.cmo -c -impl typing.ml)
+> File "typing.ml", line 84, characters 12-37:
+> 84 |   | PEunop (Uneg | Unot | Ustar as op, e1) ->
+>                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/byte/x86_64.cmo -c -impl x86_64.ml)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/usage.cmx -c -impl usage.ml)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/lexer.cmx -c -impl lexer.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/compile.cmo -c -impl compile.ml)
+> File "compile.ml", line 89, characters 13-40:
+> 89 |   | TEbinop (Blt | Ble | Bgt | Bge as op, e1, e2) ->
+>                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+> File "compile.ml", line 91, characters 13-51:
+> 91 |   | TEbinop (Badd | Bsub | Bmul | Bdiv | Bmod as op, e1, e2) ->
+>                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+> File "compile.ml", line 93, characters 13-28:
+> 93 |   | TEbinop (Beq | Bne as op, e1, e2) ->
+>                   ^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/typing.cmx -c -impl typing.ml)
+> File "typing.ml", line 84, characters 12-37:
+> 84 |   | PEunop (Uneg | Unot | Ustar as op, e1) ->
+>                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/x86_64.cmx -c -impl x86_64.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -no-alias-deps -opaque -o .main.eobjs/byte/main.cmo -c -impl main.ml)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/compile.cmx -c -impl compile.ml)
+> File "compile.ml", line 89, characters 13-40:
+> 89 |   | TEbinop (Blt | Ble | Bgt | Bge as op, e1, e2) ->
+>                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+> File "compile.ml", line 91, characters 13-51:
+> 91 |   | TEbinop (Badd | Bsub | Bmul | Bdiv | Bmod as op, e1, e2) ->
+>                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+> File "compile.ml", line 93, characters 13-28:
+> 93 |   | TEbinop (Beq | Bne as op, e1, e2) ->
+>                   ^^^^^^^^^^^^^^^
+> Warning 26: unused variable op.
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/pretty.cmx -c -impl pretty.ml)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/main.cmx -c -impl main.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -bin-annot -I .main.eobjs/byte -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/byte/parser.cmo -c -impl parser.ml)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -I .main.eobjs/byte -I .main.eobjs/native -intf-suffix .ml -no-alias-deps -opaque -o .main.eobjs/native/parser.cmx -c -impl parser.ml)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -o main.bc-for-jsoo -no-check-prims .main.eobjs/byte/lib.cmo .main.eobjs/byte/typing.cmo .main.eobjs/byte/x86_64.cmo .main.eobjs/byte/compile.cmo .main.eobjs/byte/parser.cmo .main.eobjs/byte/lexer.cmo .main.eobjs/byte/pretty.cmo .main.eobjs/byte/usage.cmo .main.eobjs/byte/main.cmo)
+$ (cd _build/default && /usr/bin/ocamlc.opt -g -o main.bc .main.eobjs/byte/lib.cmo .main.eobjs/byte/typing.cmo .main.eobjs/byte/x86_64.cmo .main.eobjs/byte/compile.cmo .main.eobjs/byte/parser.cmo .main.eobjs/byte/lexer.cmo .main.eobjs/byte/pretty.cmo .main.eobjs/byte/usage.cmo .main.eobjs/byte/main.cmo)
+$ (cd _build/default && /usr/bin/ocamlopt.opt -g -o main.exe .main.eobjs/native/lib.cmx .main.eobjs/native/typing.cmx .main.eobjs/native/x86_64.cmx .main.eobjs/native/compile.cmx .main.eobjs/native/parser.cmx .main.eobjs/native/lexer.cmx .main.eobjs/native/pretty.cmx .main.eobjs/native/usage.cmx .main.eobjs/native/main.cmx)
