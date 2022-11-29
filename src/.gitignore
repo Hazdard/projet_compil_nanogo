@@ -1,3 +1,4 @@
 ngoc
 *.go
 *.s
+_build/
