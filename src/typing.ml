@@ -13,7 +13,31 @@ exception Anomaly of string
 
 let error loc e = raise (Error (loc, e))
 
+
 (* TODO environnement pour les types structure *)
+
+let new_struct =
+  fun str field size ->
+    { s_name = str; s_fields=field ; s_size=size }
+
+module Env_struct = struct
+  module M = Map.Make(String)
+  type t = structure M.t
+  let empty = M.empty
+  let find = M.find
+  let add env str = M.add str.s_name str env
+
+  let all_vars = ref []
+
+
+  let var str field size env =
+    let v = new_struct str field size in
+    all_vars := v :: !all_vars;
+    add env v, v
+
+  (* TODO type () et vecteur de types *)
+end
+
 
 (* TODO environnement pour les fonctions *)
 
@@ -42,7 +66,7 @@ let new_var =
     incr id;
     { v_name = x; v_id = !id; v_loc = loc; v_typ = ty; v_used = used; v_addr = 0; v_depth = 0 }
 
-module Env = struct
+module Env_var = struct
   module M = Map.Make(String)
   type t = var M.t
   let empty = M.empty
@@ -101,7 +125,7 @@ and expr_desc env loc = function
   | PEnil ->
      (* TODO *) assert false
   | PEident {id=id} ->
-     (* TODO *) (try let v = Env.find id env in TEident v, v.v_typ, false
+     (* TODO *) (try let v = Env_var.find id env in TEident v, v.v_typ, false
       with Not_found -> error loc ("unbound variable " ^ id))
   | PEdot (e, id) ->
      (* TODO *) assert false
@@ -139,7 +163,7 @@ let decl = function
   | PDfunction { pf_name={id; loc}; pf_body = e; pf_typ=tyl } ->
     (* TODO check name and type *) 
     let f = { fn_name = id; fn_params = []; fn_typ = []} in
-    let e, rt = expr Env.empty e in
+    let e, rt = expr Env_var.empty e in
     TDfunction (f, e)
   | PDstruct {ps_name={id}} ->
     (* TODO *) let s = { s_name = id; s_fields = Hashtbl.create 5; s_size = 0 } in
@@ -152,6 +176,6 @@ let file ~debug:b (imp, dl) =
   List.iter phase2 dl;
   if not !found_main then error dummy_loc "missing method main";
   let dl = List.map decl dl in
-  Env.check_unused (); (* TODO variables non utilisees *)
+  Env_var.check_unused (); (* TODO variables non utilisees *)
   if imp && not !fmt_used then error dummy_loc "fmt imported but not used";
   dl
