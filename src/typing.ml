@@ -126,8 +126,12 @@ and expr_desc env loc = function
         | Blt | Ble | Bgt | Bge -> (Tbool, Tint)
         | Badd | Bsub | Bmul | Bdiv | Bmod -> (Tint, Tint)
         | Band | Bor -> (Tbool, Tbool)
-        |_->(Twild,Twild) (*Cas jamais utile*)
-      in if (desc1.expr_typ == ty_entree)&&(desc2.expr_typ==ty_entree) then (TEbinop (op, desc1, desc2), ty, false) else error loc "Mauvais type pour l'operation binaire"
+        | _ -> (Twild, Twild)
+        (*Cas jamais utile*)
+      in
+      if desc1.expr_typ == ty_entree && desc2.expr_typ == ty_entree then
+        (TEbinop (op, desc1, desc2), ty, false)
+      else error loc "Mauvais type pour l'operation binaire"
   | PEunop (Uamp, e1) -> (* TODO *) assert false
   | PEunop (((Uneg | Unot | Ustar) as op), e1) -> (* TODO *) assert false
   | PEcall ({ id = "fmt.Print" }, el) -> (* TODO *) (TEprint [], tvoid, false)
