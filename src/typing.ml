@@ -106,8 +106,6 @@ let rec is_l_value e =
   | TEunop (Ustar, e2) -> e2.expr_desc <> TEnil
   | _ -> false
 
-  
-
 let rec expr env e =
   let e, ty, rt = expr_desc env e.pexpr_loc e.pexpr_desc in
   ({ expr_desc = e; expr_typ = ty }, rt)
@@ -124,13 +122,13 @@ and expr_desc env loc = function
       let desc2, _ = expr env e2 in
       if not (desc1.expr_desc != TEnil && desc2.expr_desc != TEnil) then
         error loc "L'égualité ne peut être testée sur nil"
-      else if not (desc1.expr_typ == desc2.expr_typ) then
+      else if not (desc1.expr_typ = desc2.expr_typ) then
         error loc "Les deux membres de l'égalité doivent avoir le même type"
       else (TEbinop (op, desc1, desc2), Tbool, false)
   | PEbinop (op, e1, e2) ->
       let desc1, _ = expr env e1 in
       let desc2, _ = expr env e2 in
-      let ty, ty_entree =
+      let ty_sortie, ty_entree =
         match op with
         | Blt | Ble | Bgt | Bge -> (Tbool, Tint)
         | Badd | Bsub | Bmul | Bdiv | Bmod -> (Tint, Tint)
@@ -138,24 +136,40 @@ and expr_desc env loc = function
         | _ -> (Twild, Twild)
         (*Cas jamais utile*)
       in
-      if desc1.expr_typ == ty_entree && desc2.expr_typ == ty_entree then
-        (TEbinop (op, desc1, desc2), ty, false)
+      if desc1.expr_typ = ty_entree && desc2.expr_typ = ty_entree then
+        (TEbinop (op, desc1, desc2), ty_sortie, false)
       else error loc "Mauvais type pour l'operation binaire"
-  | PEunop (Uamp, e1) -> assert false (*
-      let desc1 = expr env e1 in
-      if is_l_value (desc1.expr_desc) then 
-        (TEunop(Uamp,desc1),Tptr(desc1.expr_typ),false)
-    else 
-        error loc "" *)
-  | PEunop ((Uneg | Unot | Ustar), e1) -> (* TODO *) assert false
-  | PEcall ({ id = "fmt.Print" }, el) -> (* TODO *) (TEprint [], tvoid, false)
+  | PEunop (Uamp, e1) ->
+      let desc1, _ = expr env e1 in
+      if is_l_value desc1 then (TEunop (Uamp, desc1), Tptr desc1.expr_typ, false)
+      else error loc "& ne s'applique qu'à une l-value"
+  | PEunop (((Uneg | Unot | Ustar) as op), e1) ->
+      let desc1, _ = expr env e1 in
+      let ty1 = desc1.expr_typ in
+      let ty_sortie, ty_entree =
+        match op with
+        | Uneg -> (Tint, Tint)
+        | Unot -> (Tbool, Tbool)
+        | Ustar -> (Tptr ty1, ty1)
+        | _ -> (Twild, Twild)
+        (*Cas jamais utile*)
+      in
+      if op = Ustar then
+        if desc1.expr_desc = TEnil then
+          error loc "Impossible de déréférencer un pointeur vide"
+        else (TEunop (op, desc1), ty_sortie, false)
+      else (TEunop (op, desc1), ty_sortie, false)
+  | PEcall ({ id = "fmt.Print" }, el) ->
+      (TEprint (List.map (fun x -> fst (expr env x)) el), tvoid, false)
   | PEcall ({ id = "new" }, [ { pexpr_desc = PEident { id } } ]) ->
       let ty =
         match id with
         | "int" -> Tint
         | "bool" -> Tbool
         | "string" -> Tstring
-        | _ -> (* TODO *) error loc ("no such type " ^ id)
+        | s -> (
+            try Env_struct.find s
+            with Not_found -> error loc ("no such type " ^ id))
       in
       (TEnew ty, Tptr ty, false)
   | PEcall ({ id = "new" }, _) -> error loc "new expects a type"
@@ -176,7 +190,7 @@ and expr_desc env loc = function
   | PEincdec (e, op) -> (* TODO *) assert false
   | PEvars _ -> (* TODO *) assert false
 
-let found_main = ref false
+let found_main = ref true (* A CHANGER *)
 
 (* 1. declare structures *)
 let phase1 = function
