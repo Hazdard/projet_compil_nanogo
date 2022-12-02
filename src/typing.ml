@@ -99,6 +99,15 @@ let tvoid = Tmany []
 let make d ty = { expr_desc = d; expr_typ = ty }
 let stmt d = make d tvoid
 
+let rec is_l_value e =
+  match e.expr_desc with
+  | TEident _ -> true
+  | TEdot (e2, _) -> is_l_value e2
+  | TEunop (Ustar, e2) -> e2.expr_desc <> TEnil
+  | _ -> false
+
+  
+
 let rec expr env e =
   let e, ty, rt = expr_desc env e.pexpr_loc e.pexpr_desc in
   ({ expr_desc = e; expr_typ = ty }, rt)
@@ -132,8 +141,13 @@ and expr_desc env loc = function
       if desc1.expr_typ == ty_entree && desc2.expr_typ == ty_entree then
         (TEbinop (op, desc1, desc2), ty, false)
       else error loc "Mauvais type pour l'operation binaire"
-  | PEunop (Uamp, e1) -> (* TODO *) assert false
-  | PEunop (((Uneg | Unot | Ustar) as op), e1) -> (* TODO *) assert false
+  | PEunop (Uamp, e1) -> assert false (*
+      let desc1 = expr env e1 in
+      if is_l_value (desc1.expr_desc) then 
+        (TEunop(Uamp,desc1),Tptr(desc1.expr_typ),false)
+    else 
+        error loc "" *)
+  | PEunop ((Uneg | Unot | Ustar), e1) -> (* TODO *) assert false
   | PEcall ({ id = "fmt.Print" }, el) -> (* TODO *) (TEprint [], tvoid, false)
   | PEcall ({ id = "new" }, [ { pexpr_desc = PEident { id } } ]) ->
       let ty =

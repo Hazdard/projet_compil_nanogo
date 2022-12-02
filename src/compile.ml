@@ -86,11 +86,11 @@ let rec expr env e = match e.expr_desc with
     (* TODO code pour ET logique lazy *) assert false 
   | TEbinop (Bor, e1, e2) ->
     (* TODO code pour OU logique lazy *) assert false 
-  | TEbinop (Blt | Ble | Bgt | Bge as op, e1, e2) ->
+  | TEbinop ((Blt | Ble | Bgt | Bge), e1, e2) ->
     (* TODO code pour comparaison ints *) assert false 
-  | TEbinop (Badd | Bsub | Bmul | Bdiv | Bmod as op, e1, e2) ->
+  | TEbinop ((Badd | Bsub | Bmul | Bdiv | Bmod), e1, e2) ->
     (* TODO code pour arithmetique ints *) assert false 
-  | TEbinop (Beq | Bne as op, e1, e2) ->
+  | TEbinop ((Beq | Bne), e1, e2) ->
     (* TODO code pour egalite toute valeur *) assert false 
   | TEunop (Uneg, e1) ->
     (* TODO code pour negation ints *) assert false 
