@@ -114,6 +114,9 @@ let rec is_l_value e =
   | TEunop (Ustar, e2) -> e2.expr_desc <> TEnil
   | _ -> false
 
+let list_to_many = function [ x ] -> x | _ as a -> Tmany a
+let ret_type = ref tvoid (*TODO INITIALISER EN PHASE 3*)
+
 let rec expr env e =
   let e, ty, rt = expr_desc env e.pexpr_loc e.pexpr_desc in
   ({ expr_desc = e; expr_typ = ty }, rt)
@@ -213,15 +216,18 @@ and expr_desc env loc = function
         | _ -> error loc "Le type utilisé n'a pas de champs"
       in
       try
-        let e_field =
-          Hashtbl.find (Env_struct.find s.s_name).s_fields id.id
-        in
+        let e_field = Hashtbl.find (Env_struct.find s.s_name).s_fields id.id in
         let ty = e_field.f_typ in
         (TEdot (e_tast, e_field), ty, false)
       with Not_found ->
         error loc ("Le champ suivant n'est pas défini " ^ id.id))
   | PEassign (lvl, el) -> (* TODO *) (TEassign ([], []), tvoid, false)
-  | PEreturn el -> (* TODO *) (TEreturn [], tvoid, true)
+  | PEreturn el ->
+      if
+        !ret_type
+        <> list_to_many (List.map (fun x -> (fst (expr env x)).expr_typ) el)
+      then error loc "Type du return différent de celui de la fonction"
+      else (TEreturn (List.map (fun x -> fst (expr env x)) el), tvoid, true)
   | PEblock el ->
       (TEblock (List.map (fun x -> fst (expr env x)) el), tvoid, false)
   | PEincdec (e, op) -> (* TODO *) assert false
