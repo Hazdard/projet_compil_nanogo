@@ -13,28 +13,36 @@ let error loc e = raise (Error (loc, e))
 
 (* TOFINISH environnement pour les types structure *)
 
-let new_struct str field size =
-  { s_name = str; s_fields = field; s_size = size }
-
 module Env_struct = struct
-  module M = Map.Make (String)
+  let struct_tabl = Hashtbl.create 17
+  let find = Hashtbl.find struct_tabl
+  let add str = Hashtbl.add struct_tabl str.s_name str
 
-  type t = structure M.t
+  let new_struct str field size =
+    { s_name = str; s_fields = field; s_size = size }
 
-  let empty = M.empty
-  let find = M.find
-  let add env str = M.add str.s_name str env
-  let all_vars = ref []
+  let struct_create str field size =
+    let s = new_struct str field size in
+    add s;
+    s
 
-  let var str field size env =
-    let v = new_struct str field size in
-    all_vars := v :: !all_vars;
-    (add env v, v)
-
-  (* TODO type () et vecteur de types *)
+  let empty str = struct_create str (Hashtbl.create 0) 0
+  let exists str = Hashtbl.mem struct_tabl str
 end
 
-(* TODO environnement pour les fonctions *)
+module Env_fnct = struct
+  let fnct_tbl = Hashtbl.create 17
+  let find = Hashtbl.find fnct_tbl
+  let add f = Hashtbl.add fnct_tbl f.fn_name f
+  let new_fun f params ty_l = { fn_name = f; fn_params = params; fn_typ = ty_l }
+
+  let fun_create f params ty_l =
+    let s = new_fun f params ty_l in
+    add s;
+    s
+
+  let exists f = Hashtbl.mem fnct_tbl f
+end
 
 let rec type_type = function
   | PTident { id = "int" } -> Tint
@@ -160,7 +168,10 @@ and expr_desc env loc = function
         else (TEunop (op, desc1), ty_sortie, false)
       else (TEunop (op, desc1), ty_sortie, false)
   | PEcall ({ id = "fmt.Print" }, el) ->
-      (TEprint (List.map (fun x -> fst (expr env x)) el), tvoid, false)
+      if not !fmt_imported then error loc "fmt used but not imported";
+      fmt_used := true;
+      let l = List.map (fun x -> fst (expr env x)) el in
+      (TEprint l, tvoid, false)
   | PEcall ({ id = "new" }, [ { pexpr_desc = PEident { id } } ]) ->
       let ty =
         match id with
@@ -169,10 +180,11 @@ and expr_desc env loc = function
         | "string" -> Tstring
         | s -> (
             try Env_struct.find s
-            with Not_found -> error loc ("no such type " ^ id))
+            with Not_found -> error loc ("Le type suivant est inconnu " ^ id))
       in
       (TEnew ty, Tptr ty, false)
-  | PEcall ({ id = "new" }, _) -> error loc "new expects a type"
+  | PEcall ({ id = "new" }, _) ->
+      error loc "new attends un un identifiant de structure non utilisé"
   | PEcall (id, el) -> (* TODO *) assert false
   | PEfor (e, b) -> (* TODO *) assert false
   | PEif (e1, e2, e3) -> (* TODO *) assert false
@@ -186,7 +198,8 @@ and expr_desc env loc = function
   | PEdot (e, id) -> (* TODO *) assert false
   | PEassign (lvl, el) -> (* TODO *) (TEassign ([], []), tvoid, false)
   | PEreturn el -> (* TODO *) (TEreturn [], tvoid, true)
-  | PEblock el -> (* TODO *) (TEblock [], tvoid, false)
+  | PEblock el ->
+      (TEblock (List.map (fun x -> fst (expr env x)) el), tvoid, false)
   | PEincdec (e, op) -> (* TODO *) assert false
   | PEvars _ -> (* TODO *) assert false
 

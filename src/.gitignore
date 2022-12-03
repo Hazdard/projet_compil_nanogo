@@ -3,3 +3,4 @@ ngoc
 *.s
 _build/
 *.dot
+*.png
