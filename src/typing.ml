@@ -179,23 +179,47 @@ and expr_desc env loc = function
         | "bool" -> Tbool
         | "string" -> Tstring
         | s -> (
-            try Env_struct.find s
+            try Tstruct (Env_struct.find s)
             with Not_found -> error loc ("Le type suivant est inconnu " ^ id))
       in
       (TEnew ty, Tptr ty, false)
-  | PEcall ({ id = "new" }, _) ->
-      error loc "new attends un un identifiant de structure non utilisé"
+  | PEcall ({ id = "new" }, _) -> error loc "new attends un type en entrée"
   | PEcall (id, el) -> (* TODO *) assert false
-  | PEfor (e, b) -> (* TODO *) assert false
-  | PEif (e1, e2, e3) -> (* TODO *) assert false
-  | PEnil -> (* TODO *) assert false
+  | PEfor (e, b) ->
+      let e_tast, _ = expr env e in
+      let b_tast, ret = expr env b in
+      if not (e_tast.expr_typ = Tbool) then
+        error e.pexpr_loc "Cette expression doit être un booléen"
+      else (TEfor (e_tast, b_tast), tvoid, ret)
+  | PEif (e1, e2, e3) ->
+      let e1_tast, _ = expr env e1 in
+      let e2_tast, ret2 = expr env e2 in
+      let e3_tast, ret3 = expr env e3 in
+      if not (e1_tast.expr_typ = Tbool) then
+        error e1.pexpr_loc "Cette expression doit être un booléen"
+      else (TEif (e1_tast, e2_tast, e3_tast), tvoid, ret2 && ret3)
+  | PEnil -> (TEnil, Tptr Twild, false)
   | PEident { id } -> (
       (* TODO *)
       try
         let v = Env_var.find id env in
         (TEident v, v.v_typ, false)
       with Not_found -> error loc ("unbound variable " ^ id))
-  | PEdot (e, id) -> (* TODO *) assert false
+  | PEdot (e, id) -> (
+      let e_tast, ret = expr env e in
+      let s =
+        match e_tast.expr_typ with
+        | Tstruct str | Tptr (Tstruct str) -> str
+        | _ -> error loc "Le type utilisé n'a pas de champs"
+      in
+      try
+        let e_field =
+          Hashtbl.find (Env_struct.find s.s_name).s_fields id.id
+        in
+        let ty = e_field.f_typ in
+        (TEdot (e_tast, e_field), ty, false)
+      with Not_found ->
+        error loc ("Le champ suivant n'est pas défini " ^ id.id))
   | PEassign (lvl, el) -> (* TODO *) (TEassign ([], []), tvoid, false)
   | PEreturn el -> (* TODO *) (TEreturn [], tvoid, true)
   | PEblock el ->
