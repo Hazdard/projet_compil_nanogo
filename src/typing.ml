@@ -222,9 +222,11 @@ and expr_desc env loc = function
       else (TEif (e1_tast, e2_tast, e3_tast), tvoid, ret2 && ret3)
   | PEnil -> (TEnil, Tptr Twild, false)
   | PEident { id } -> (
-      (* TODO *)
+      if id = "_" then
+        error loc " _ ne peut pas être utilisé comme une variable";
       try
         let v = Env_var.find id env in
+        v.v_used <- true;
         (TEident v, v.v_typ, false)
       with Not_found -> error loc ("unbound variable " ^ id))
   | PEdot (e, id) -> (
@@ -240,17 +242,44 @@ and expr_desc env loc = function
         (TEdot (e_tast, e_field), ty, false)
       with Not_found ->
         error loc ("Le champ suivant n'est pas défini " ^ id.id))
-  | PEassign (lvl, el) -> (* TODO *) (TEassign ([], []), tvoid, false)
+  | PEassign (lvl, el) ->
+      let lvl_typed = List.map (fun x -> fst (expr env x)) lvl in
+      let rec aux l =
+        match l with [] -> true | a :: q -> is_l_value a && aux q
+      in
+      if aux lvl_typed then
+        let lvl_typed_ty = List.map (fun x -> x.expr_typ) lvl_typed in
+        let el_typed = List.map (fun x -> fst (expr env x)) el in
+        let el_typed_ty = List.map (fun x -> x.expr_typ) el_typed in
+        if eq_type (Tmany el_typed_ty) (Tmany lvl_typed_ty) then
+          (TEassign ([], []), tvoid, false)
+        else error loc "Erreur de typage pour les valeurs attribuées"
+      else error loc "Ce n'est pas une l-value"
   | PEreturn el ->
       if
         !ret_type
         <> list_to_many (List.map (fun x -> (fst (expr env x)).expr_typ) el)
       then error loc "Type du return différent de celui de la fonction"
       else (TEreturn (List.map (fun x -> fst (expr env x)) el), tvoid, true)
-  | PEblock el ->
-      (TEblock (List.map (fun x -> fst (expr env x)) el), tvoid, false)
+  | PEblock el -> (
+      match el with
+      | [] -> (TEblock [], tvoid, false)
+      | a :: q ->
+          let a_typed, reta = expr env a in
+          let new_env =
+            match a_typed.expr_desc with
+            | TEvars (lvl, el) -> List.fold_left Env_var.add env lvl
+            | _ -> env
+          in
+          let rest =
+            match expr new_env { pexpr_desc = PEblock q; pexpr_loc = loc } with
+            (* loc a mettre au premier elem de q mais jai la flemme *)
+            | { expr_desc = TEblock el }, ret -> (el, ret)
+            | _ -> error loc "Ce cas n'arrive jamais !"
+          in
+          (TEblock (a_typed :: fst rest), tvoid, snd rest || reta))
   | PEincdec (e, op) -> (* TODO *) assert false
-  | PEvars _ -> (* TODO *) assert false
+  | PEvars _ -> 
 
 let found_main = ref true (* A CHANGER *)
 
