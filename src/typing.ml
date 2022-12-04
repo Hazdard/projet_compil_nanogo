@@ -279,7 +279,7 @@ and expr_desc env loc = function
           in
           (TEblock (a_typed :: fst rest), tvoid, snd rest || reta))
   | PEincdec (e, op) -> (* TODO *) assert false
-  | PEvars _ -> 
+  | PEvars _ -> assert false 
 
 let found_main = ref true (* A CHANGER *)
 
