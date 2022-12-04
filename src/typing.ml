@@ -57,8 +57,18 @@ let rec eq_type ty1 ty2 =
   | Tint, Tint | Tbool, Tbool | Tstring, Tstring -> true
   | Tstruct s1, Tstruct s2 -> s1 == s2
   | Tptr ty1, Tptr ty2 -> eq_type ty1 ty2
-  | _ -> false
-(* TODO autres types *)
+  | Twild, _ -> true
+  | _, Twild -> true
+  | Tmany el1, Tmany el2 ->
+      let rec aux l1 l2 =
+        match (l1, l2) with
+        | [], [] -> true
+        | [], a :: q -> false
+        | a :: q, [] -> false
+        | a :: q, b :: v -> eq_type a b
+      in
+      aux el1 el2
+  | _, _ -> false
 
 let fmt_used = ref false
 let fmt_imported = ref false
@@ -187,7 +197,16 @@ and expr_desc env loc = function
       in
       (TEnew ty, Tptr ty, false)
   | PEcall ({ id = "new" }, _) -> error loc "new attends un type en entrée"
-  | PEcall (id, el) -> (* TODO *) assert false
+  | PEcall (id, el) -> (
+      try
+        let f = Env_fnct.find id.id in
+        let el_typed = List.map (fun x -> fst (expr env x)) el in
+        let el_typed_ty = List.map (fun x -> x.expr_typ) el_typed in
+        let f_typed_ty = List.map (fun x -> x.v_typ) f.fn_params in
+        if eq_type (Tmany el_typed_ty) (Tmany f_typed_ty) then
+          (TEcall (f, el_typed), tvoid, false)
+        else error loc "Argument incorrect"
+      with Not_found -> error loc "Fonction non définie")
   | PEfor (e, b) ->
       let e_tast, _ = expr env e in
       let b_tast, ret = expr env b in
