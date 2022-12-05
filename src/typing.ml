@@ -204,7 +204,7 @@ and expr_desc env loc = function
         let el_typed_ty = List.map (fun x -> x.expr_typ) el_typed in
         let f_typed_ty = List.map (fun x -> x.v_typ) f.fn_params in
         if eq_type (Tmany el_typed_ty) (Tmany f_typed_ty) then
-          (TEcall (f, el_typed), tvoid, false)
+          (TEcall (f, el_typed), Tmany f_typed_ty, false)
         else error loc "Argument incorrect"
       with Not_found -> error loc "Fonction non définie")
   | PEfor (e, b) ->
@@ -279,7 +279,37 @@ and expr_desc env loc = function
           in
           (TEblock (a_typed :: fst rest), tvoid, snd rest || reta))
   | PEincdec (e, op) -> (* TODO *) assert false
-  | PEvars _ -> assert false 
+  | PEvars (ids, None, pexprs) ->
+      let el = List.map (fun x -> fst (expr env x)) pexprs in
+      let el_typed = List.map (fun x -> x.expr_typ) el in
+      let rec aux id_l ty_l env =
+        match (id_l, ty_l) with
+        | [], [] -> []
+        | { id = "_" } :: q, _ :: r -> aux q r env
+        | id :: q, ty :: r ->
+            snd (Env_var.var id.id loc ty env) :: aux q r env
+            (*TODO j'ajoute sans faire gaffe si ça existe déjà ou pas, check si c ok*)
+        | _ -> error loc "Mauvaise arité du membre de droite"
+      in
+      let vars = aux ids el_typed env in
+      (TEvars (vars, el), tvoid, false)
+  | PEvars (ids, Some pty, pexprs) ->
+      let pty_typed = type_type pty in
+      let el = List.map (fun x -> fst (expr env x)) pexprs in
+      let el_typed = List.map (fun x -> x.expr_typ) el in
+      let rec aux id_l ty_l env =
+        match (id_l, ty_l) with
+        | [], [] -> []
+        | { id = "_" } :: q, _ :: r -> aux q r env
+        | id :: q, ty :: r ->
+            if eq_type pty_typed ty then
+              snd (Env_var.var id.id loc ty env) :: aux q r env
+              (*TODO j'ajoute sans faire gaffe si ça existe déjà ou pas, check si c ok*)
+            else error loc "Erreur de typage dans la déclaration"
+        | _ -> error loc "Mauvaise arité du membre de droite"
+      in
+      let vars = aux ids el_typed env in
+      (TEvars (vars, el), tvoid, false)
 
 let found_main = ref true (* A CHANGER *)
 
