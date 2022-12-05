@@ -286,9 +286,12 @@ and expr_desc env loc = function
         match (id_l, ty_l) with
         | [], [] -> []
         | { id = "_" } :: q, _ :: r -> aux q r env
-        | id :: q, ty :: r ->
-            snd (Env_var.var id.id loc ty env) :: aux q r env
-            (*TODO j'ajoute sans faire gaffe si ça existe déjà ou pas, check si c ok*)
+        | id :: q, ty :: r -> (
+            try
+              let _ = Env_var.find id.id env in
+              error loc "Variable déjà définie"
+            with Not_found ->
+              snd (Env_var.var id.id loc ty env) :: aux q r env)
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
       let vars = aux ids el_typed env in
@@ -303,7 +306,11 @@ and expr_desc env loc = function
         | { id = "_" } :: q, _ :: r -> aux q r env
         | id :: q, ty :: r ->
             if eq_type pty_typed ty then
-              snd (Env_var.var id.id loc ty env) :: aux q r env
+              try
+                let _ = Env_var.find id.id env in
+                error loc "Variable déjà utilisée"
+              with Not_found ->
+                snd (Env_var.var id.id loc ty env) :: aux q r env
               (*TODO j'ajoute sans faire gaffe si ça existe déjà ou pas, check si c ok*)
             else error loc "Erreur de typage dans la déclaration"
         | _ -> error loc "Mauvaise arité du membre de droite"
@@ -347,7 +354,8 @@ let file ~debug:b (imp, dl) =
   List.iter phase2 dl;
   if not !found_main then error dummy_loc "missing method main";
   let dl = List.map decl dl in
-  Env_var.check_unused ();
+  (* Env_var.check_unused (); *)
+  (*TODO REMETTRE *)
   (* TODO variables non utilisees *)
   if imp && not !fmt_used then error dummy_loc "fmt imported but not used";
   dl
