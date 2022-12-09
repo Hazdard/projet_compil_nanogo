@@ -107,7 +107,7 @@ module Env_var = struct
 
   let check_unused () =
     let check v =
-      if v.v_name <> "_" && (* TODO used *) true then
+      if v.v_name <> "_" && (not v.v_used) then
         error v.v_loc "unused variable"
     in
     List.iter check !all_vars
@@ -229,7 +229,6 @@ and expr_desc env loc = function
       else (TEif (e1_tast, e2_tast, e3_tast), tvoid, ret2 && ret3)
   | PEnil -> (TEnil, Tptr Twild, false)
   | PEident { id } -> (
-      printf "\n Je suis la hihi \n";
       if id = "_" then
         error loc " _ ne peut pas être utilisé comme une variable";
       try
@@ -391,7 +390,7 @@ let phase2 = function
         && List.for_all is_well_formed tyl
       then
         if Env_fnct.exists id then
-          error loc ("La fonction " ^ id ^ " est mal déjà définie")
+          error loc ("La fonction " ^ id ^ " est déjà définie")
         else
           Env_fnct.fun_create id
             (List.map
@@ -422,26 +421,47 @@ let phase2 = function
         (sizeof (Tmany (List.map (fun (a, b) -> type_type b) fl)))
 
 (* 3. type check function bodies *)
+
+let is_recursive name =
+  let s = Env_struct.find name in
+  let recurse = ref false in
+  let rec aux f =
+    match f.f_typ with
+    | Tstruct s' ->
+        if s'.s_name = name then recurse := true
+        else Hashtbl.iter (fun _ x -> aux x) s'.s_fields
+    | _ -> ()
+  in
+  Hashtbl.iter (fun _ x -> aux x) s.s_fields;
+  !recurse
+
 let decl = function
-  | PDfunction { pf_name = { id; loc }; pf_body = e; pf_typ = tyl } ->
+  | PDfunction { pf_name = { id; loc }; pf_body = e } ->
       (* TODO check name and type *)
-      let f = { fn_name = id; fn_params = []; fn_typ = [] } in
-      let e, rt = expr Env_var.empty e in
-      TDfunction (f, e)
-  | PDstruct { ps_name = { id } } ->
-      (* TODO *)
-      let s = { s_name = id; s_fields = Hashtbl.create 5; s_size = 0 } in
-      TDstruct s
+      let f = Env_fnct.find id in
+      let env = Env_var.empty in
+      let rec aux l envir =
+        match l with [] -> envir | a :: q -> aux q (Env_var.add envir a)
+      in
+      let env_init = aux f.fn_params env in
+      ret_type := list_to_many f.fn_typ;
+      let e, rt = expr env_init e in
+      if (not rt) && List.length f.fn_typ > 0 then
+        error loc "Pas de return dans le bloc"
+      else TDfunction (f, e)
+  | PDstruct { ps_name = { id; loc } } ->
+      if is_recursive id then error loc ("La structure " ^ id ^ " est récursive")
+      else
+        let s = Env_struct.find id in
+        TDstruct s
 
 let file ~debug:b (imp, dl) =
   debug := b;
-  (* fmt_imported := imp; *)
+  fmt_imported := imp;
   List.iter phase1 dl;
   List.iter phase2 dl;
   if not !found_main then error dummy_loc "missing method main";
   let dl = List.map decl dl in
-  (* Env_var.check_unused (); *)
-  (*TODO REMETTRE *)
-  (* TODO variables non utilisees *)
+  Env_var.check_unused ();
   if imp && not !fmt_used then error dummy_loc "fmt imported but not used";
   dl
