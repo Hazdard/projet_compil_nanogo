@@ -22,11 +22,18 @@ module Env_struct = struct
     { s_name = str; s_fields = field; s_size = size }
 
   let struct_create str field size =
-    let s = new_struct str field size in
+    let champs = Hashtbl.create 2 in
+    let rec aux l =
+      match l with
+      | [] -> ()
+      | (nom, field_var) :: q -> Hashtbl.add champs nom field_var
+    in
+    aux field;
+    let s = new_struct str champs size in
     add s;
-    s
+    ()
 
-  let empty str = struct_create str (Hashtbl.create 0) 0
+  let empty str = struct_create str [] 0
   let exists str = Hashtbl.mem struct_tabl str
 end
 
@@ -39,7 +46,7 @@ module Env_fnct = struct
   let fun_create f params ty_l =
     let s = new_fun f params ty_l in
     add s;
-    s
+    ()
 
   let exists f = Hashtbl.mem fnct_tbl f
 end
@@ -284,7 +291,15 @@ and expr_desc env loc = function
             | _ -> error loc "Ce cas n'arrive jamais !"
           in
           (TEblock (a_typed :: fst rest), tvoid, snd rest || reta))
-  | PEincdec (e, op) -> (* TODO *) assert false
+  | PEincdec (e, op) ->
+      let ne, _ = expr env e in
+      if ne.expr_typ <> Tint then
+        error loc
+          "L'incrémentation/décrémentation doit se faire sur un type int";
+      if not (is_l_value ne) then
+        error e.pexpr_loc
+          "L'incrémentation/décrémentation doit se faire sur une l-value";
+      (TEincdec (ne, op), tvoid, false)
   | PEvars (ids, None, pexprs) ->
       let el = List.map (fun x -> fst (expr env x)) pexprs in
       let rec aux id_l exp_l env =
@@ -331,22 +346,80 @@ and expr_desc env loc = function
       if is_def then (TEvars (vars, expr2), tvoid, false)
       else (TEvars (vars, []), tvoid, false)
 
-let found_main = ref true (* A CHANGER *)
+let found_main = ref false
 
 (* 1. declare structures *)
 let phase1 = function
-  | PDstruct { ps_name = { id; loc } } -> (* TODO *) ()
+  | PDstruct { ps_name = { id; loc } } ->
+      if Env_struct.exists id then
+        error loc ("La structure" ^ id ^ "est déjà définie")
+      else Env_struct.empty id
   | PDfunction _ -> ()
 
-let sizeof = function
+let rec sizeof = function
   | Tint | Tbool | Tstring | Tptr _ -> 8
-  | _ -> (* TODO *) assert false
+  | Tstruct s -> Hashtbl.fold (fun _ b c -> c + sizeof b.f_typ) s.s_fields 0
+  | Tmany l -> List.fold_left (fun i x -> i + sizeof x) 0 l
+  | _ -> assert false
 
 (* 2. declare functions and type fields *)
+
+let rec are_distinct l =
+  match l with
+  | [] -> true
+  | a :: q ->
+      let rec aux q =
+        match q with [] -> true | b :: r -> if a == b then false else aux r
+      in
+      aux q
+
+let rec is_well_formed = function
+  | PTident { id = "int" } | PTident { id = "bool" } | PTident { id = "string" }
+    ->
+      true
+  | PTptr ty -> is_well_formed ty
+  | PTident { id = s } -> Env_struct.exists s
+
 let phase2 = function
   | PDfunction { pf_name = { id; loc }; pf_params = pl; pf_typ = tyl } ->
-      (* TODO *) ()
-  | PDstruct { ps_name = { id }; ps_fields = fl } -> (* TODO *) ()
+      if id = "main" then (
+        if pl <> [] then error loc "La fonction main ne prend pas d'arguments";
+        if tyl <> [] then error loc "La fonction main n'a pas de retour";
+        found_main := true);
+      if
+        List.for_all is_well_formed (List.map snd pl)
+        && List.for_all is_well_formed tyl
+      then
+        if Env_fnct.exists id then
+          error loc ("La fonction " ^ id ^ " est mal déjà définie")
+        else
+          Env_fnct.fun_create id
+            (List.map
+               (fun (a, b) ->
+                 {
+                   v_name = a.id;
+                   v_loc = a.loc;
+                   v_typ = type_type b;
+                   v_id = 0;
+                   v_depth = 0;
+                   v_used = false;
+                   v_addr = 0;
+                 })
+               pl)
+            (List.map (fun x -> type_type x) tyl)
+      else error loc ("La fonction " ^ id ^ " est mal formée")
+  | PDstruct ({ ps_name = { id; loc }; ps_fields = fl } as s) ->
+      if not (List.for_all is_well_formed (List.map snd fl)) then
+        error loc ("Types mal formés dans la structure :" ^ id);
+      if not (are_distinct (List.map (fun (a, b) -> a.id) fl)) then
+        error loc
+          ("Attributs présents plusieurs fois dans la structure " ^ s.ps_name.id);
+      Env_struct.struct_create id
+        (List.map
+           (fun (a, b) ->
+             (a.id, { f_name = a.id; f_typ = type_type b; f_ofs = 0 }))
+           fl)
+        (sizeof (Tmany (List.map (fun (a, b) -> type_type b) fl)))
 
 (* 3. type check function bodies *)
 let decl = function
