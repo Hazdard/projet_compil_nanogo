@@ -244,18 +244,23 @@ and expr_desc env loc = function
       with Not_found ->
         error loc ("Le champ suivant n'est pas défini " ^ id.id))
   | PEassign (lvl, el) ->
-      let lvl_typed = List.map (fun x -> fst (expr env x)) lvl in
-      let rec aux l =
-        match l with [] -> true | a :: q -> is_l_value a && aux q
+      let el_typed = List.map (fun x -> fst (expr env x)) el in
+      let rec aux lv expr_l =
+        match (lv, expr_l) with
+        | [], [] -> ([], [])
+        | { pexpr_desc = PEident { id = "_" } } :: q, _ :: r -> aux q r
+        | pe :: q, exp1 :: r ->
+            let pe_exp = fst (expr env pe) in
+            if is_l_value pe_exp then
+              if eq_type pe_exp.expr_typ exp1.expr_typ then
+                let l1, l2 = aux q r in
+                (pe_exp :: l1, exp1 :: l2)
+              else error loc "Erreur de typage dans l'assignation"
+            else error loc "Le membre de gauche doit être une l-value"
+        | _ -> error loc "Mauvaise arité du membre de droite"
       in
-      if aux lvl_typed then
-        let lvl_typed_ty = List.map (fun x -> x.expr_typ) lvl_typed in
-        let el_typed = List.map (fun x -> fst (expr env x)) el in
-        let el_typed_ty = List.map (fun x -> x.expr_typ) el_typed in
-        if eq_type (Tmany el_typed_ty) (Tmany lvl_typed_ty) then
-          (TEassign (lvl_typed, el_typed), tvoid, false)
-        else error loc "Erreur de typage pour les valeurs attribuées"
-      else error loc "Le membre de gauche n'est pas une l-value"
+      let l1, l2 = aux lvl el_typed in
+      (TEassign (l1, l2), tvoid, false)
   | PEreturn el ->
       if
         !ret_type
@@ -305,28 +310,27 @@ and expr_desc env loc = function
           List.map (fun x -> { expr_desc = TEskip; expr_typ = pty_typed }) ids
         else List.map (fun x -> fst (expr env x)) pexprs
       in
-      let rec aux id_l exp_l env =
+      let rec aux id_l exp_l =
         match (id_l, exp_l) with
         | [], [] -> ([], [])
-        | { id = "_" } :: q, _ :: r -> aux q r env
+        | { id = "_" } :: q, _ :: r -> aux q r
         | id :: q, exp :: r ->
             if eq_type pty_typed exp.expr_typ then
               try
                 let _ = Env_var.find id.id env in
                 error loc "Variable déjà utilisée"
               with Not_found ->
-                let rec1, rec2 = aux q r env in
+                let rec1, rec2 = aux q r in
                 ( snd (Env_var.var id.id loc exp.expr_typ env) :: rec1,
                   exp :: rec2 )
             else error loc "Erreur de typage dans la déclaration"
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
-      let vars, expr2 = aux ids el env in
+      let vars, expr2 = aux ids el in
       let is_def = if List.length pexprs == 0 then false else true in
-      if is_def then
-      (TEvars (vars, expr2), tvoid, false)
-      else 
-      (TEvars (vars, []), tvoid, false)
+      if is_def then (TEvars (vars, expr2), tvoid, false)
+      else (TEvars (vars, []), tvoid, false)
+
 let found_main = ref true (* A CHANGER *)
 
 (* 1. declare structures *)
