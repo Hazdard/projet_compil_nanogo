@@ -281,8 +281,6 @@ and expr_desc env loc ?(first_time = true) = function
                 let l1, l2 = aux q r in
                 (pe_exp :: l1, exp1 :: l2)
               else (
-                print_string (print_ty pe_exp.expr_typ);
-                print_string (print_ty exp1.expr_typ);
                 error loc "Erreur de typage dans l'assignation")
             else error loc "Le membre de gauche doit être une l-value"
         | _ -> error loc "Mauvaise arité du membre de droite"
@@ -346,7 +344,7 @@ and expr_desc env loc ?(first_time = true) = function
         | id :: q, typ :: r -> (
             try
               let v_concurrent = Env_var.find id.id env in
-              if v_concurrent.v_depth == !global_depth then
+              if v_concurrent.v_depth = !global_depth then
                 error loc "Variable déjà définie"
               else
                 let new_env, v = Env_var.var id.id loc typ env in
@@ -363,7 +361,7 @@ and expr_desc env loc ?(first_time = true) = function
   | PEvars (ids, Some pty, pexprs) ->
       let pty_typed = type_type pty in
       let el =
-        if List.length pexprs == 0 then
+        if List.length pexprs = 0 then
           List.map (fun x -> { expr_desc = TEskip; expr_typ = pty_typed }) ids
         else List.map (fun x -> fst (expr env x)) pexprs
       in
@@ -389,7 +387,7 @@ and expr_desc env loc ?(first_time = true) = function
             if eq_type pty_typed typ then
               try
                 let v_concurrent = Env_var.find id.id env in
-                if v_concurrent.v_depth == !global_depth then
+                if v_concurrent.v_depth = !global_depth then
                   error loc "Variable déjà définie"
                 else
                   let new_env, v = Env_var.var id.id loc typ env in
@@ -403,7 +401,7 @@ and expr_desc env loc ?(first_time = true) = function
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
       let vars = aux ids el_typed env in
-      let is_def = if List.length pexprs == 0 then false else true in
+      let is_def = if List.length pexprs = 0 then false else true in
       if is_def then (TEvars (vars, el), tvoid, false)
       else (TEvars (vars, []), tvoid, false)
 
@@ -429,10 +427,10 @@ let rec are_distinct l =
   match l with
   | [] -> true
   | a :: q ->
-      let rec aux q =
-        match q with [] -> true | b :: r -> if a == b then false else aux r
+      let rec aux x q =
+        match q with [] -> true | b :: r -> if x = b then false else aux x r
       in
-      aux q
+      aux a q && are_distinct q
 
 let rec is_well_formed = function
   | PTident { id = "int" } | PTident { id = "bool" } | PTident { id = "string" }
@@ -524,6 +522,6 @@ let file ~debug:b (imp, dl) =
   List.iter phase2 dl;
   if not !found_main then error dummy_loc "missing method main";
   let dl = List.map decl dl in
-  (*Env_var.check_unused ();*)
+  Env_var.check_unused ();
   if imp && not !fmt_used then error dummy_loc "fmt imported but not used";
   dl
