@@ -26,7 +26,7 @@ module Env_struct = struct
     let rec aux l =
       match l with
       | [] -> ()
-      | (nom, field_var) :: q -> Hashtbl.add champs nom field_var
+      | (nom, field_var) :: q -> Hashtbl.add champs nom field_var; aux q
     in
     aux field;
     let s = new_struct str champs size in
@@ -56,8 +56,9 @@ let rec type_type = function
   | PTident { id = "bool" } -> Tbool
   | PTident { id = "string" } -> Tstring
   | PTptr ty -> Tptr (type_type ty)
-  | _ -> error dummy_loc "unknown struct "
-(* TODO type structure *)
+  | PTident { id = s; loc } -> (
+      try Tstruct (Env_struct.find s)
+      with Not_found -> error loc "Structure inconnue")
 
 let rec eq_type ty1 ty2 =
   match (ty1, ty2) with
@@ -107,8 +108,7 @@ module Env_var = struct
 
   let check_unused () =
     let check v =
-      if v.v_name <> "_" && (not v.v_used) then
-        error v.v_loc "unused variable"
+      if v.v_name <> "_" && not v.v_used then error v.v_loc "unused variable"
     in
     List.iter check !all_vars
 
