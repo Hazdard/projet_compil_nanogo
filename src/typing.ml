@@ -296,7 +296,7 @@ and expr_desc env loc = function
       in
       let vars = aux ids el_typed env in
       (TEvars (vars, el), tvoid, false)
-  | PEvars (ids, Some pty, pexprs) ->
+  | PEvars (ids, Some pty, pexprs) -> (* RAJOUTER CAS SI PEXPRS VIDE, i.e on assigne pas de valeurs mais seulement un type *)
       let pty_typed = type_type pty in
       let el = List.map (fun x -> fst (expr env x)) pexprs in
       let el_typed = List.map (fun x -> x.expr_typ) el in
