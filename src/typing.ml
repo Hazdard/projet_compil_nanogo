@@ -9,9 +9,21 @@ let dummy_loc = (Lexing.dummy_pos, Lexing.dummy_pos)
 exception Error of Ast.location * string
 exception Anomaly of string
 
-let error loc e = raise (Error (loc, e))
+let rec print_ty ty =
+  match ty with
+  | Tint -> " Tint "
+  | Tbool -> " Tbool "
+  | Tstring -> " Tstring "
+  | Tstruct s -> s.s_name
+  | Tptr t -> (" Tptr (" ^ print_ty t) ^ ")"
+  | Twild -> " Twild "
+  | Tmany tl ->
+      let rec aux el =
+        match el with [] -> " " | a :: q -> print_ty a ^ aux q
+      in
+      "Tmany [" ^ aux tl ^ "]"
 
-(* TOFINISH environnement pour les types structure *)
+let error loc e = raise (Error (loc, e))
 
 module Env_struct = struct
   let struct_tabl = Hashtbl.create 17
@@ -26,7 +38,9 @@ module Env_struct = struct
     let rec aux l =
       match l with
       | [] -> ()
-      | (nom, field_var) :: q -> Hashtbl.add champs nom field_var; aux q
+      | (nom, field_var) :: q ->
+          Hashtbl.add champs nom field_var;
+          aux q
     in
     aux field;
     let s = new_struct str champs size in
@@ -81,6 +95,7 @@ let rec eq_type ty1 ty2 =
 let fmt_used = ref false
 let fmt_imported = ref false
 let evar v = { expr_desc = TEident v; expr_typ = v.v_typ }
+let global_depth = ref 0
 
 let new_var =
   let id = ref 0 in
@@ -93,7 +108,7 @@ let new_var =
       v_typ = ty;
       v_used = used;
       v_addr = 0;
-      v_depth = 0;
+      v_depth = !global_depth;
     }
 
 module Env_var = struct
@@ -116,8 +131,6 @@ module Env_var = struct
     let v = new_var x loc ?used ty in
     all_vars := v :: !all_vars;
     (add env v, v)
-
-  (* TODO type () et vecteur de types *)
 end
 
 let tvoid = Tmany []
@@ -131,14 +144,14 @@ let rec is_l_value e =
   | TEunop (Ustar, e2) -> e2.expr_desc <> TEnil
   | _ -> false
 
-let list_to_many = function [ x ] -> x | _ as a -> Tmany a
-let ret_type = ref tvoid (*TODO INITIALISER EN PHASE 3*)
+let list_to_many = function [ x ] -> x | a -> Tmany a
+let ret_type = ref tvoid
 
 let rec expr env e =
   let e, ty, rt = expr_desc env e.pexpr_loc e.pexpr_desc in
   ({ expr_desc = e; expr_typ = ty }, rt)
 
-and expr_desc env loc = function
+and expr_desc env loc ?(first_time = true) = function
   | PEskip -> (TEskip, tvoid, false)
   | PEconstant c ->
       let ty =
@@ -161,12 +174,11 @@ and expr_desc env loc = function
         | Blt | Ble | Bgt | Bge -> (Tbool, Tint)
         | Badd | Bsub | Bmul | Bdiv | Bmod -> (Tint, Tint)
         | Band | Bor -> (Tbool, Tbool)
-        | _ -> (Twild, Twild)
-        (*Cas jamais utile*)
+        | _ -> error loc "ce cas ne doit pas arriver 17"
       in
-      if desc1.expr_typ = ty_entree && desc2.expr_typ = ty_entree then
-        (TEbinop (op, desc1, desc2), ty_sortie, false)
-      else error loc "Mauvais type pour l'operation binaire"
+      if eq_type desc1.expr_typ ty_entree && eq_type desc2.expr_typ ty_entree
+      then (TEbinop (op, desc1, desc2), ty_sortie, false)
+      else error loc "Mauvais type pour l'operation binaire, on a "
   | PEunop (Uamp, e1) ->
       let desc1, _ = expr env e1 in
       if is_l_value desc1 then (TEunop (Uamp, desc1), Tptr desc1.expr_typ, false)
@@ -178,15 +190,22 @@ and expr_desc env loc = function
         match op with
         | Uneg -> (Tint, Tint)
         | Unot -> (Tbool, Tbool)
-        | Ustar -> (Tptr ty1, ty1)
-        | _ -> (Twild, Twild)
+        | Ustar -> (
+            match ty1 with
+            | Tptr ty_prev -> (ty_prev, Tptr ty_prev)
+            | _ ->
+                error loc
+                  "Impossible de déréférencer autre chose qu'un pointeur")
+        | _ -> error loc "Ce cas n'est pas censé arriver 42"
         (*Cas jamais utile*)
       in
-      if op = Ustar then
-        if desc1.expr_desc = TEnil then
-          error loc "Impossible de déréférencer un pointeur vide"
+      if eq_type ty1 ty_entree then
+        if op = Ustar then
+          if desc1.expr_desc = TEnil then
+            error loc "Impossible de déréférencer un pointeur vide"
+          else (TEunop (op, desc1), ty_sortie, false)
         else (TEunop (op, desc1), ty_sortie, false)
-      else (TEunop (op, desc1), ty_sortie, false)
+      else error loc "Mauvais type pour l'opération unaire"
   | PEcall ({ id = "fmt.Print" }, el) ->
       if not !fmt_imported then error loc "fmt used but not imported";
       fmt_used := true;
@@ -211,7 +230,7 @@ and expr_desc env loc = function
         let el_typed_ty = List.map (fun x -> x.expr_typ) el_typed in
         let f_typed_ty = List.map (fun x -> x.v_typ) f.fn_params in
         if eq_type (Tmany el_typed_ty) (Tmany f_typed_ty) then
-          (TEcall (f, el_typed), Tmany f_typed_ty, false)
+          (TEcall (f, el_typed), list_to_many f.fn_typ, false)
         else error loc "Argument incorrect"
       with Not_found -> error loc "Fonction non définie")
   | PEfor (e, b) ->
@@ -251,8 +270,8 @@ and expr_desc env loc = function
         error loc ("Le champ suivant n'est pas défini " ^ id.id))
   | PEassign (lvl, el) ->
       let el_typed = List.map (fun x -> fst (expr env x)) el in
-      let rec aux lv expr_l =
-        match (lv, expr_l) with
+      let rec aux lvl expr_l =
+        match (lvl, expr_l) with
         | [], [] -> ([], [])
         | { pexpr_desc = PEident { id = "_" } } :: q, _ :: r -> aux q r
         | pe :: q, exp1 :: r ->
@@ -261,7 +280,10 @@ and expr_desc env loc = function
               if eq_type pe_exp.expr_typ exp1.expr_typ then
                 let l1, l2 = aux q r in
                 (pe_exp :: l1, exp1 :: l2)
-              else error loc "Erreur de typage dans l'assignation"
+              else (
+                print_string (print_ty pe_exp.expr_typ);
+                print_string (print_ty exp1.expr_typ);
+                error loc "Erreur de typage dans l'assignation")
             else error loc "Le membre de gauche doit être une l-value"
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
@@ -274,6 +296,7 @@ and expr_desc env loc = function
       then error loc "Type du return différent de celui de la fonction"
       else (TEreturn (List.map (fun x -> fst (expr env x)) el), tvoid, true)
   | PEblock el -> (
+      if first_time then incr global_depth else ();
       match el with
       | [] -> (TEblock [], tvoid, false)
       | a :: q ->
@@ -289,6 +312,7 @@ and expr_desc env loc = function
             | { expr_desc = TEblock el }, ret -> (el, ret)
             | _ -> error loc "Ce cas n'arrive jamais !"
           in
+          decr global_depth;
           (TEblock (a_typed :: fst rest), tvoid, snd rest || reta))
   | PEincdec (e, op) ->
       let ne, _ = expr env e in
@@ -301,22 +325,41 @@ and expr_desc env loc = function
       (TEincdec (ne, op), tvoid, false)
   | PEvars (ids, None, pexprs) ->
       let el = List.map (fun x -> fst (expr env x)) pexprs in
-      let rec aux id_l exp_l env =
-        match (id_l, exp_l) with
-        | [], [] -> ([], [])
-        | { id = "_" } :: q, _ :: r -> aux q r env
-        | id :: q, exp :: r -> (
+      let el_typed =
+        match List.map (fun x -> x.expr_typ) el with [ Tmany l ] -> l | l -> l
+      in
+      let rec aux id_l tyl env =
+        match (id_l, tyl) with
+        | [], [] -> []
+        | { id = "_" } :: q, typ :: r ->
+            let call_rec = aux q r env in
+            {
+              v_loc = loc;
+              v_typ = typ;
+              v_depth = !global_depth;
+              v_used = true;
+              v_addr = 0;
+              v_name = "_";
+              v_id = -1;
+            }
+            :: call_rec
+        | id :: q, typ :: r -> (
             try
-              let _ = Env_var.find id.id env in
-              error loc "Variable déjà définie"
+              let v_concurrent = Env_var.find id.id env in
+              if v_concurrent.v_depth == !global_depth then
+                error loc "Variable déjà définie"
+              else
+                let new_env, v = Env_var.var id.id loc typ env in
+                let call_rec = aux q r new_env in
+                v :: call_rec
             with Not_found ->
-              let rec1, rec2 = aux q r env in
-              (snd (Env_var.var id.id loc exp.expr_typ env) :: rec1, exp :: rec2)
-            )
+              let new_env, v = Env_var.var id.id loc typ env in
+              let call_rec = aux q r new_env in
+              v :: call_rec)
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
-      let vars, expr2 = aux ids el env in
-      (TEvars (vars, expr2), tvoid, false)
+      let vars = aux ids el_typed env in
+      (TEvars (vars, el), tvoid, false)
   | PEvars (ids, Some pty, pexprs) ->
       let pty_typed = type_type pty in
       let el =
@@ -324,25 +367,44 @@ and expr_desc env loc = function
           List.map (fun x -> { expr_desc = TEskip; expr_typ = pty_typed }) ids
         else List.map (fun x -> fst (expr env x)) pexprs
       in
-      let rec aux id_l exp_l =
-        match (id_l, exp_l) with
-        | [], [] -> ([], [])
-        | { id = "_" } :: q, _ :: r -> aux q r
-        | id :: q, exp :: r ->
-            if eq_type pty_typed exp.expr_typ then
+      let el_typed =
+        match List.map (fun x -> x.expr_typ) el with [ Tmany l ] -> l | l -> l
+      in
+      let rec aux id_l tyl env =
+        match (id_l, tyl) with
+        | [], [] -> []
+        | { id = "_" } :: q, typ :: r ->
+            let call_rec = aux q r env in
+            {
+              v_loc = loc;
+              v_typ = typ;
+              v_depth = -1;
+              v_used = true;
+              v_addr = 0;
+              v_name = "_";
+              v_id = -1;
+            }
+            :: call_rec
+        | id :: q, typ :: r ->
+            if eq_type pty_typed typ then
               try
-                let _ = Env_var.find id.id env in
-                error loc "Variable déjà utilisée"
+                let v_concurrent = Env_var.find id.id env in
+                if v_concurrent.v_depth == !global_depth then
+                  error loc "Variable déjà définie"
+                else
+                  let new_env, v = Env_var.var id.id loc typ env in
+                  let call_rec = aux q r new_env in
+                  v :: call_rec
               with Not_found ->
-                let rec1, rec2 = aux q r in
-                ( snd (Env_var.var id.id loc exp.expr_typ env) :: rec1,
-                  exp :: rec2 )
-            else error loc "Erreur de typage dans la déclaration"
+                let new_env, v = Env_var.var id.id loc typ env in
+                let call_rec = aux q r new_env in
+                v :: call_rec
+            else error loc "Mauvais typage du membre de droite"
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
-      let vars, expr2 = aux ids el in
+      let vars = aux ids el_typed env in
       let is_def = if List.length pexprs == 0 then false else true in
-      if is_def then (TEvars (vars, expr2), tvoid, false)
+      if is_def then (TEvars (vars, el), tvoid, false)
       else (TEvars (vars, []), tvoid, false)
 
 let found_main = ref false
@@ -400,12 +462,12 @@ let phase2 = function
                    v_loc = a.loc;
                    v_typ = type_type b;
                    v_id = 0;
-                   v_depth = 0;
+                   v_depth = !global_depth;
                    v_used = false;
                    v_addr = 0;
                  })
                pl)
-            (List.map (fun x -> type_type x) tyl)
+            (List.map type_type tyl)
       else error loc ("La fonction " ^ id ^ " est mal formée")
   | PDstruct ({ ps_name = { id; loc }; ps_fields = fl } as s) ->
       if not (List.for_all is_well_formed (List.map snd fl)) then
@@ -437,9 +499,9 @@ let is_recursive name =
 
 let decl = function
   | PDfunction { pf_name = { id; loc }; pf_body = e } ->
-      (* TODO check name and type *)
       let f = Env_fnct.find id in
       let env = Env_var.empty in
+
       let rec aux l envir =
         match l with [] -> envir | a :: q -> aux q (Env_var.add envir a)
       in
@@ -462,6 +524,6 @@ let file ~debug:b (imp, dl) =
   List.iter phase2 dl;
   if not !found_main then error dummy_loc "missing method main";
   let dl = List.map decl dl in
-  Env_var.check_unused ();
+  (*Env_var.check_unused ();*)
   if imp && not !fmt_used then error dummy_loc "fmt imported but not used";
   dl
