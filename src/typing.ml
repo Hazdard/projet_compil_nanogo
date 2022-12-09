@@ -222,6 +222,7 @@ and expr_desc env loc = function
       else (TEif (e1_tast, e2_tast, e3_tast), tvoid, ret2 && ret3)
   | PEnil -> (TEnil, Tptr Twild, false)
   | PEident { id } -> (
+      printf "\n Je suis la hihi \n";
       if id = "_" then
         error loc " _ ne peut pas être utilisé comme une variable";
       try
@@ -252,9 +253,9 @@ and expr_desc env loc = function
         let el_typed = List.map (fun x -> fst (expr env x)) el in
         let el_typed_ty = List.map (fun x -> x.expr_typ) el_typed in
         if eq_type (Tmany el_typed_ty) (Tmany lvl_typed_ty) then
-          (TEassign ([], []), tvoid, false)
+          (TEassign (lvl_typed, el_typed), tvoid, false)
         else error loc "Erreur de typage pour les valeurs attribuées"
-      else error loc "Ce n'est pas une l-value"
+      else error loc "Le membre de gauche n'est pas une l-value"
   | PEreturn el ->
       if
         !ret_type
@@ -281,43 +282,51 @@ and expr_desc env loc = function
   | PEincdec (e, op) -> (* TODO *) assert false
   | PEvars (ids, None, pexprs) ->
       let el = List.map (fun x -> fst (expr env x)) pexprs in
-      let el_typed = List.map (fun x -> x.expr_typ) el in
-      let rec aux id_l ty_l env =
-        match (id_l, ty_l) with
-        | [], [] -> []
+      let rec aux id_l exp_l env =
+        match (id_l, exp_l) with
+        | [], [] -> ([], [])
         | { id = "_" } :: q, _ :: r -> aux q r env
-        | id :: q, ty :: r -> (
+        | id :: q, exp :: r -> (
             try
               let _ = Env_var.find id.id env in
               error loc "Variable déjà définie"
             with Not_found ->
-              snd (Env_var.var id.id loc ty env) :: aux q r env)
+              let rec1, rec2 = aux q r env in
+              (snd (Env_var.var id.id loc exp.expr_typ env) :: rec1, exp :: rec2)
+            )
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
-      let vars = aux ids el_typed env in
-      (TEvars (vars, el), tvoid, false)
-  | PEvars (ids, Some pty, pexprs) -> (* RAJOUTER CAS SI PEXPRS VIDE, i.e on assigne pas de valeurs mais seulement un type *)
+      let vars, expr2 = aux ids el env in
+      (TEvars (vars, expr2), tvoid, false)
+  | PEvars (ids, Some pty, pexprs) ->
       let pty_typed = type_type pty in
-      let el = List.map (fun x -> fst (expr env x)) pexprs in
-      let el_typed = List.map (fun x -> x.expr_typ) el in
-      let rec aux id_l ty_l env =
-        match (id_l, ty_l) with
-        | [], [] -> []
+      let el =
+        if List.length pexprs == 0 then
+          List.map (fun x -> { expr_desc = TEskip; expr_typ = pty_typed }) ids
+        else List.map (fun x -> fst (expr env x)) pexprs
+      in
+      let rec aux id_l exp_l env =
+        match (id_l, exp_l) with
+        | [], [] -> ([], [])
         | { id = "_" } :: q, _ :: r -> aux q r env
-        | id :: q, ty :: r ->
-            if eq_type pty_typed ty then
+        | id :: q, exp :: r ->
+            if eq_type pty_typed exp.expr_typ then
               try
                 let _ = Env_var.find id.id env in
                 error loc "Variable déjà utilisée"
               with Not_found ->
-                snd (Env_var.var id.id loc ty env) :: aux q r env
-              (*TODO j'ajoute sans faire gaffe si ça existe déjà ou pas, check si c ok*)
+                let rec1, rec2 = aux q r env in
+                ( snd (Env_var.var id.id loc exp.expr_typ env) :: rec1,
+                  exp :: rec2 )
             else error loc "Erreur de typage dans la déclaration"
         | _ -> error loc "Mauvaise arité du membre de droite"
       in
-      let vars = aux ids el_typed env in
-      (TEvars (vars, el), tvoid, false)
-
+      let vars, expr2 = aux ids el env in
+      let is_def = if List.length pexprs == 0 then false else true in
+      if is_def then
+      (TEvars (vars, expr2), tvoid, false)
+      else 
+      (TEvars (vars, []), tvoid, false)
 let found_main = ref true (* A CHANGER *)
 
 (* 1. declare structures *)
