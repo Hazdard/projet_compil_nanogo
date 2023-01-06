@@ -22,9 +22,10 @@ and field = {
 }
 
 and structure = {
-          s_name: string;
-        s_fields: (string, field) Hashtbl.t;
-  mutable s_size: int; (* taille calculee en octets *)
+                    s_name: string;
+                  s_fields: (string, field) Hashtbl.t;
+  mutable s_ordered_fields: field list; (* ordered list of fields. Used in print schemes *)
+            mutable s_size: int; (* taille calculee en octets *)
 }
 
 and typ =
@@ -32,6 +33,7 @@ and typ =
   | Tstruct of structure
   | Tptr of typ
   | Twild (* type wildcard, tout type *)
+  | Tptrnil (* type pointeur nil *)
   | Tmany of typ list (* 0 pour type retour instructions et >=2 pour retour functions *)
   (* TODO autres types pour l'analyse semantique, si besoin *)
 

@@ -200,6 +200,7 @@ let rec get_tast_typ typ parent_id =
   let create_node = create_node parent_id in
   match typ with
   | Tint -> create_node "Tint" [] []
+  | Tptrnil  -> create_node "Tptrnil" [] []
   | Tbool -> create_node "Tbool" [] []
   | Tstring -> create_node "Tstring" [] []
   | Tstruct {s_name; s_fields} -> create_node "Tstruct" [ "s_name = \"" ^ s_name ^ "\""] []
