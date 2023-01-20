@@ -4,3 +4,4 @@ ngoc
 _build/
 *.dot
 *.png
+test

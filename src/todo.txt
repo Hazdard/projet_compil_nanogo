@@ -1,7 +1,0 @@
-installer graphviz
-
-./ngoc test.go --debug
-
-dot myfile.dot -Tpng -o mytest.png
-
-firefox mytest.png

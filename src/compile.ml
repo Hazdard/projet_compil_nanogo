@@ -81,9 +81,22 @@ let rec expr env e = match e.expr_desc with
   | TEnil ->
     xorq (reg rdi) (reg rdi)
   | TEconstant (Cstring s) ->
-    (* TODO code pour constante string *) assert false 
+    let l = alloc_string s in
+  movq (ilab l) (reg rdi) 
   | TEbinop (Band, e1, e2) ->
-    (* TODO code pour ET logique lazy *) assert false 
+    let l_false = new_label () in
+    let l_end = new_label () in
+    expr env e1 ++
+    testq (reg rdi) (reg rdi) ++
+    jz l_false ++
+    expr env e2 ++
+    testq (reg rdi) (reg rdi) ++
+    jz l_false ++
+    movq (imm 1) (reg rdi) ++
+    jmp l_end ++
+    label l_false ++
+    movq (imm 0) (reg rdi) ++
+    label l_end
   | TEbinop (Bor, e1, e2) ->
     (* TODO code pour OU logique lazy *) assert false 
   | TEbinop ((Blt | Ble | Bgt | Bge), e1, e2) ->
@@ -135,7 +148,7 @@ let rec expr env e = match e.expr_desc with
 
 let function_ f e =
   if !debug then eprintf "function %s:@." f.fn_name;
-  (* TODO code pour fonction *) let s = f.fn_name in label ("F_" ^ s) 
+  (* TODO code pour fonction *) let s = f.fn_name in label ("F_" ^ s)  ++ expr empty_env e
 
 let decl code = function
   | TDfunction (f, e) -> code ++ function_ f e
@@ -165,3 +178,4 @@ print_int:
       (Hashtbl.fold (fun l s d -> label l ++ string s ++ d) strings nop)
     ;
   }
+
