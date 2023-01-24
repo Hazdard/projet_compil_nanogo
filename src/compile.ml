@@ -119,19 +119,43 @@ let rec expr env e =
          | TEbinop (Ble, _, _) -> jle l_true
          | TEbinop (Bgt, _, _) -> jg l_true
          | TEbinop (Bge, _, _) -> jge l_true
-         | _ -> raise (Error (dummy_loc, "This can't happen cmp_binop")))
+         | _ -> raise (Error (dummy_loc, "This can't happen cmp_binop1")))
       ++ movq (imm 0) (reg rdi)
       ++ jmp l_end ++ label l_true
       ++ movq (imm 1) (reg rdi)
       ++ label l_end
-  | TEbinop ((Badd | Bsub | Bmul | Bdiv | Bmod), e1, e2) ->
-      (* TODO code pour arithmetique ints *) assert false
-  | TEbinop ((Beq | Bne), e1, e2) ->
-      (* TODO code pour egalite toute valeur *) assert false
-  | TEunop (Uneg, e1) -> (* TODO code pour negation ints *) assert false
-  | TEunop (Unot, e1) -> (* TODO code pour negation bool *) assert false
+  | TEbinop (((Badd | Bsub | Bmul | Bdiv | Bmod) as op), e1, e2) -> (
+      expr env e1
+      ++ pushq (reg rdi)
+      ++ expr env e2 ++ popq rax
+      ++
+      match op with
+      | Badd -> addq (reg rax) (reg rdi)
+      | Bsub -> subq (reg rdi) (reg rax) ++ movq (reg rax) (reg rdi)
+      | Bmul -> imulq (reg rax) (reg rdi)
+      | Bdiv -> cqto ++ idivq (reg rdi) ++ movq (reg rax) (reg rdi)
+      | Bmod -> cqto ++ idivq (reg rdi) ++ movq (reg rdx) (reg rdi)
+      | _ -> raise (Error (dummy_loc, "This can't happen cmp_binop2")))
+  | TEbinop (((Beq | Bne) as op), e1, e2) ->
+      let l_true = new_label () in
+      let l_end = new_label () in
+      expr env e1
+      ++ movq (reg rdi) (reg rsi)
+      ++ expr env e2
+      ++ cmpq (reg rdi) (reg rsi)
+      ++ (match op with
+         | Beq -> je l_true
+         | Bne -> jne l_true
+         | _ -> raise (Error (dummy_loc, "This can't happen cmp_binop3")))
+      ++ movq (imm 0) (reg rdi)
+      ++ jmp l_end ++ label l_true
+      ++ movq (imm 1) (reg rdi)
+      ++ label l_end
+  | TEunop (Uneg, e1) -> expr env e1 ++ negq (reg rdi)
+  | TEunop (Unot, e1) ->
+      expr env e1 ++ cmpq (imm 0) (reg rdi) ++ compile_bool jz
   | TEunop (Uamp, e1) -> (* TODO code pour & *) assert false
-  | TEunop (Ustar, e1) -> (* TODO code pour * *) assert false
+  | TEunop (Ustar, e1) -> expr env e1 ++ movq (ind rdi) (reg rdi)
   | TEprint el -> (* TODO code pour Print *) assert false
   | TEident x -> (* TODO code pour x *) assert false
   | TEassign ([ { expr_desc = TEident x } ], [ e1 ]) ->
