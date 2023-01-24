@@ -52,17 +52,18 @@ let new_label =
     incr r;
     "L_" ^ string_of_int !r
 
-type env = {
-  exit_label : string;
-  ofs_this : int;
-  nb_locals : int ref; (* maximum *)
-  next_local : int; (* 0, 1, ... *)
-}
+type env = { exit_label : string; mutable nb_locals : int (* maximum *) }
 
-let empty_env =
-  { exit_label = ""; ofs_this = -1; nb_locals = ref 0; next_local = 0 }
-
+let empty_env = { exit_label = ""; nb_locals = 0 }
+let fun_env f = { exit_label = "E_" ^ f.fn_name; nb_locals = 0 }
 let mk_bool d = { expr_desc = d; expr_typ = Tbool }
+
+let push_ret arg_s ret_s =
+  let c = ref nop in
+  for i = 1 to ret_s / 8 do
+    c := !c ++ pushq (ind rsp ~ofs:(-8 - arg_s))
+  done;
+  !c
 
 (* f reçoit le label correspondant à ``renvoyer vrai'' *)
 let compile_bool f =
@@ -177,10 +178,9 @@ let rec expr env e =
   | TEident x -> movq (ind ~ofs:x.v_addr rbp) (reg rdi)
   | TEassign ([ lv ], [ e1 ]) ->
       let lv_addr =
+        (* met l'addresse de lv dans %rdi *)
         match lv.expr_desc with
-        | TEident x ->
-            if x.v_name = "_" then nop
-            else movq (reg rdi) (ind ~ofs:x.v_addr rbp)
+        | TEident x -> movq (reg rbp) (reg rdi) ++ addq (imm x.v_addr) (reg rdi)
         | TEunop (Ustar, e) -> expr env e
         | TEdot (e, x) -> expr env e ++ addq (imm x.f_ofs) (reg rdi)
         | _ -> raise (Error (dummy_loc, "This can't happen cmp_assign"))
@@ -190,24 +190,173 @@ let rec expr env e =
       ++ pushq (reg rdi)
       ++ expr env e ++ popq rsi
       ++ movq (reg rdi) (ind rsi)
-  | TEassign (_, _) -> assert false
-  | TEblock el -> (* TODO code pour block *) assert false
-  | TEif (e1, e2, e3) -> (* TODO code pour if *) assert false
-  | TEfor (e1, e2) -> (* TODO code pour for *) assert false
-  | TEnew ty -> (* TODO code pour new S *) assert false
-  | TEcall (f, el) -> (* TODO code pour appel fonction *) assert false
-  | TEdot (e1, { f_ofs = ofs }) -> (* TODO code pour e.f *) assert false
+  | TEassign (vl, el) ->
+      (* Pareil que le cas précédent mais on l'applique récursivement à toute une liste *)
+      let rec aux a b =
+        match (a, b) with
+        | x :: r, y :: q ->
+            expr env { expr_desc = TEassign ([ x ], [ y ]); expr_typ = Twild }
+            ++ aux r q
+        | _, _ -> nop
+      in
+      aux vl el
+  | TEblock block ->
+      let rec aux env el =
+        match el with
+        | [] -> nop
+        | { expr_desc = TEvars (vl, el) } :: t ->
+            let id = ref (-8 * (env.nb_locals + 1)) in
+            List.iter
+              (fun v ->
+                v.v_addr <- !id;
+                id := !id - 8)
+              vl;
+            env.nb_locals <- env.nb_locals + List.length vl;
+            (if el = [] then
+             List.fold_left
+               (fun c v -> c ++ xorq (reg rdi) (reg rdi) ++ pushq (reg rdi))
+               nop vl
+            else
+              List.fold_left
+                (fun c exp ->
+                  c ++ expr env exp
+                  ++
+                  match exp.expr_typ with
+                  | Tmany _ -> nop
+                  | _ -> pushq (reg rdi))
+                nop el)
+            ++ aux env t
+        | h :: t -> expr env h ++ aux env t
+      in
+      aux env block
+  | TEif (e1, e2, e3) ->
+      let l_else = new_label () and l_end = new_label () in
+      expr env e1
+      ++ testq (reg rdi) (reg rdi)
+      ++ jz l_else ++ expr env e2 ++ jmp l_end ++ label l_else ++ expr env e3
+      ++ label l_end
+  | TEfor (e1, e2) ->
+      let l_cond = new_label () and l_end = new_label () in
+      label l_cond ++ expr env e1
+      ++ testq (reg rdi) (reg rdi)
+      ++ jz l_end ++ expr env e2 ++ jmp l_cond ++ label l_end
+  | TEnew ty ->
+      movq (imm (sizeof ty)) (reg rdi)
+      ++ call "allocz"
+      ++ movq (reg rax) (reg rdi)
+  | TEcall (f, el) -> (
+      let arg_s = List.length f.fn_params * 8 in
+      let ret_s = List.length f.fn_typ * 8 in
+      List.fold_left
+        (fun c exp ->
+          c ++ expr env exp
+          ++ match exp.expr_typ with Tmany _ -> nop | _ -> pushq (reg rdi))
+        nop el
+      ++ call ("F_" ^ f.fn_name)
+      ++
+      match e.expr_typ with
+      | Tmany _ -> addq (imm (ret_s + arg_s)) (reg rsp) ++ push_ret arg_s ret_s
+      | _ -> addq (imm arg_s) (reg rsp))
+  | TEdot (e1, f) -> assert false
   | TEvars _ -> assert false (* fait dans block *)
-  | TEreturn [] -> (* TODO code pour return e *) assert false
-  | TEreturn [ e1 ] -> (* TODO code pour return e1,... *) assert false
-  | TEreturn _ -> assert false
-  | TEincdec (e1, op) -> (* TODO code pour return e++, e-- *) assert false
+  | TEreturn [] -> jmp env.exit_label
+  | TEreturn [ e1 ] -> expr env e1 ++ jmp env.exit_label
+  | TEreturn el ->
+      List.fold_left (fun c exp -> c ++ expr env exp ++ pushq (reg rdi)) nop el
+      ++ jmp env.exit_label
+  | TEincdec (e1, op) ->
+      let as_op =
+        match op with Inc -> incq (ind rdi) | Dec -> decq (ind rdi)
+      in
+      (match e1.expr_desc with
+      | TEident x -> movq (reg rbp) (reg rdi) ++ addq (imm x.v_addr) (reg rdi)
+      | TEunop (Ustar, e) -> expr env e
+      | TEdot (e, x) -> expr env e ++ addq (imm x.f_ofs) (reg rdi)
+      | _ -> assert false (* Ce cas n'arrive jamais car e1 est une l-value *))
+      ++ as_op
 
 let function_ f e =
   if !debug then eprintf "function %s:@." f.fn_name;
-  (* TODO code pour fonction *)
   let s = f.fn_name in
-  label ("F_" ^ s) ++ expr empty_env e
+  let env = fun_env f in
+  let args_addr = ref ((List.length f.fn_params * 8) + 8) in
+  List.iter
+    (fun v ->
+      v.v_addr <- !args_addr;
+      args_addr := !args_addr - 8)
+    f.fn_params;
+  label ("F_" ^ s)
+  ++ pushq (reg rbp)
+  ++ movq (reg rsp) (reg rbp)
+  ++ expr env e
+  ++ label ("E_" ^ s)
+  ++ movq (reg rbp) (reg rsp)
+  ++ popq rbp
+  ++ (if List.length f.fn_typ > 1 then
+      popq r15 ++ push_ret 16 (List.length f.fn_typ * 8) ++ pushq (reg r15)
+     else nop)
+  ++ ret
+
+(* Fonctions d'affichage *)
+
+let print_bool =
+  let l_false = new_label () in
+  label "print_bool"
+  ++ xorq (reg rax) (reg rax)
+  ++ cmpq (imm 0) (reg rdi)
+  ++ je l_false
+  ++ movq (ilab "S_true") (reg rdi)
+  ++ call "printf" ++ ret ++ label l_false
+  ++ movq (ilab "S_false") (reg rdi)
+  ++ call "printf" ++ ret
+
+let print_int =
+  label "print_int"
+  ++ movq (reg rdi) (reg rsi)
+  ++ movq (ilab "S_int") (reg rdi)
+  ++ xorq (reg rax) (reg rax)
+  ++ call "printf" ++ ret
+
+let print_ptr =
+  label "print_ptr"
+  ++ testq (reg rdi) (reg rdi)
+  ++ je "print_nil"
+  ++ movq (reg rdi) (reg rsi)
+  ++ movq (ilab "S_hexint") (reg rdi)
+  ++ xorq (reg rax) (reg rax)
+  ++ call "printf" ++ ret
+
+let print_string =
+  label "print_string"
+  ++ testq (reg rdi) (reg rdi)
+  ++ je "print_nil"
+  ++ movq (reg rdi) (reg rsi)
+  ++ movq (ilab "S_string") (reg rdi)
+  ++ xorq (reg rax) (reg rax)
+  ++ call "printf" ++ ret
+
+let print_nil =
+  label "print_nil"
+  ++ movq (ilab "S_nil") (reg rdi)
+  ++ xorq (reg rax) (reg rax)
+  ++ call "printf" ++ ret
+
+let print_space =
+  label "print_space"
+  ++ movq (ilab "S_space") (reg rdi)
+  ++ xorq (reg rax) (reg rax)
+  ++ call "printf" ++ ret
+
+let allocz =
+  let loop_lab = new_label () in
+  label "allocz"
+  ++ pushq (reg rbx)
+  ++ movq (reg rdi) (reg rbx)
+  ++ call "malloc" ++ label loop_lab
+  ++ decq (reg rbx)
+  ++ movb (imm 0) (ind rax ~index:rbx)
+  ++ testq (reg rbx) (reg rbx)
+  ++ jnz loop_lab ++ popq rbx ++ ret
 
 let decl code = function
   | TDfunction (f, e) -> code ++ function_ f e
@@ -222,18 +371,14 @@ let file ?debug:(b = false) dl =
     text =
       globl "main" ++ label "main" ++ call "F_main"
       ++ xorq (reg rax) (reg rax)
-      ++ ret ++ funs
-      ++ inline
-           "\n\
-            print_int:\n\
-           \        movq    %rdi, %rsi\n\
-           \        movq    $S_int, %rdi\n\
-           \        xorq    %rax, %rax\n\
-           \        call    printf\n\
-           \        ret\n";
+      ++ ret ++ funs ++ print_int ++ print_ptr ++ print_bool ++ print_string
+      ++ print_nil ++ print_space ++ allocz;
     (* TODO print pour d'autres valeurs *)
     (* TODO appel malloc de stdlib *)
     data =
-      label "S_int" ++ string "%ld"
+      label "S_int" ++ string "%ld" ++ label "S_hexint" ++ string "0x%x"
+      ++ label "S_true" ++ string "true" ++ label "S_false" ++ string "false"
+      ++ label "S_string" ++ string "%s" ++ label "S_nil" ++ string "<nil>"
+      ++ label "S_space" ++ string " "
       ++ Hashtbl.fold (fun l s d -> label l ++ string s ++ d) strings nop;
   }
