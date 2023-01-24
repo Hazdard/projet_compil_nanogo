@@ -171,6 +171,7 @@ let rec expr env e =
             ++ (match e.expr_typ with
                | Tbool -> call "print_bool"
                | Tstring -> call "print_string"
+               | Tptrnil -> call "print_int"
                | Tstruct s | Tptr (Tstruct s) ->
                    call "print_space"
                    (* Je n'ai pas réussi à implémenter les structures*)
