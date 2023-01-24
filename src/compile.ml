@@ -155,7 +155,12 @@ let rec expr env e =
   | TEunop (Uneg, e1) -> expr env e1 ++ negq (reg rdi)
   | TEunop (Unot, e1) ->
       expr env e1 ++ cmpq (imm 0) (reg rdi) ++ compile_bool jz
-  | TEunop (Uamp, e1) -> (* TODO code pour & *) assert false
+  | TEunop (Uamp, e1) -> (
+      match e1.expr_desc with
+      | TEident x -> movq (reg rbp) (reg rdi) ++ addq (imm x.v_addr) (reg rdi)
+      | TEunop (Ustar, e) -> expr env e
+      | TEdot (e, x) -> expr env e ++ addq (imm x.f_ofs) (reg rdi)
+      | _ -> assert false (* Ce cas n'arrive jamais car e1 est une l-value *))
   | TEunop (Ustar, e1) -> expr env e1 ++ movq (ind rdi) (reg rdi)
   | TEprint el ->
       let rec aux l =
@@ -176,19 +181,19 @@ let rec expr env e =
       in
       aux el ++ call "print_space"
   | TEident x -> movq (ind ~ofs:x.v_addr rbp) (reg rdi)
-  | TEassign ([ lv ], [ e1 ]) ->
+  | TEassign ([ lv ], [ e1 ]) -> 
       let lv_addr =
         (* met l'addresse de lv dans %rdi *)
         match lv.expr_desc with
         | TEident x -> movq (reg rbp) (reg rdi) ++ addq (imm x.v_addr) (reg rdi)
-        | TEunop (Ustar, e) -> expr env e
-        | TEdot (e, x) -> expr env e ++ addq (imm x.f_ofs) (reg rdi)
+        | TEunop (Ustar, e2) -> expr env e2
+        | TEdot (e2, x) -> expr env e2 ++ addq (imm x.f_ofs) (reg rdi)
         | _ -> raise (Error (dummy_loc, "This can't happen cmp_assign"))
         (* Ce cas n'arrive jamais car lv est une l-value *)
       in
       lv_addr
       ++ pushq (reg rdi)
-      ++ expr env e ++ popq rsi
+      ++ expr env e1 ++ popq rsi
       ++ movq (reg rdi) (ind rsi)
   | TEassign (vl, el) ->
       (* Pareil que le cas précédent mais on l'applique récursivement à toute une liste *)
@@ -240,7 +245,7 @@ let rec expr env e =
       label l_cond ++ expr env e1
       ++ testq (reg rdi) (reg rdi)
       ++ jz l_end ++ expr env e2 ++ jmp l_cond ++ label l_end
-  | TEnew ty ->
+  | TEnew ty -> 
       movq (imm (sizeof ty)) (reg rdi)
       ++ call "allocz"
       ++ movq (reg rax) (reg rdi)
