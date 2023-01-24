@@ -156,12 +156,40 @@ let rec expr env e =
       expr env e1 ++ cmpq (imm 0) (reg rdi) ++ compile_bool jz
   | TEunop (Uamp, e1) -> (* TODO code pour & *) assert false
   | TEunop (Ustar, e1) -> expr env e1 ++ movq (ind rdi) (reg rdi)
-  | TEprint el -> (* TODO code pour Print *) assert false
-  | TEident x -> (* TODO code pour x *) assert false
-  | TEassign ([ { expr_desc = TEident x } ], [ e1 ]) ->
-      (* TODO code pour x := e *) assert false
+  | TEprint el ->
+      let rec aux l =
+        match l with
+        | [] -> nop
+        | e :: t ->
+            expr env e
+            ++ (match e.expr_typ with
+               | Tbool -> call "print_bool"
+               | Tstring -> call "print_string"
+               | Tstruct s | Tptr (Tstruct s) ->
+                   call "print_space"
+                   (* Je n'ai pas réussi à implémenter les structures*)
+               | Tint | Tptr _ -> call "print_int"
+               | _ -> raise (Error (dummy_loc, "This can't happen cmp_print")))
+            ++ (if t <> [] then ( ++ ) (call "print_space") else fun x -> x)
+                 (aux t)
+      in
+      aux el ++ call "print_space"
+  | TEident x -> movq (ind ~ofs:x.v_addr rbp) (reg rdi)
   | TEassign ([ lv ], [ e1 ]) ->
-      (* TODO code pour x1,... := e1,... *) assert false
+      let lv_addr =
+        match lv.expr_desc with
+        | TEident x ->
+            if x.v_name = "_" then nop
+            else movq (reg rdi) (ind ~ofs:x.v_addr rbp)
+        | TEunop (Ustar, e) -> expr env e
+        | TEdot (e, x) -> expr env e ++ addq (imm x.f_ofs) (reg rdi)
+        | _ -> raise (Error (dummy_loc, "This can't happen cmp_assign"))
+        (* Ce cas n'arrive jamais car lv est une l-value *)
+      in
+      lv_addr
+      ++ pushq (reg rdi)
+      ++ expr env e ++ popq rsi
+      ++ movq (reg rdi) (ind rsi)
   | TEassign (_, _) -> assert false
   | TEblock el -> (* TODO code pour block *) assert false
   | TEif (e1, e2, e3) -> (* TODO code pour if *) assert false
